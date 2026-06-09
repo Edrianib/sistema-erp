@@ -1986,7 +1986,7 @@
                 var id = this.getAttribute('data-id');
                 var nombre = this.getAttribute('data-nombre');
                 var rol = this.getAttribute('data-rol');
-                editarUsuario(id, nombre, rol);
+                abrirModalEditarUsuario(id, nombre, rol);
             });
         }
 
@@ -1995,47 +1995,44 @@
             btnsEliminar[di].addEventListener('click', function () {
                 var id = this.getAttribute('data-id');
                 var nombre = this.getAttribute('data-nombre');
-                eliminarUsuarioConfirm(id, nombre);
+                abrirModalEliminarUsuario(id, nombre);
             });
         }
     }
 
-    async function editarUsuario(userId, nombreActual, rolActual) {
-        var rolOptions = ['Admin', 'Gerente', 'Vendedor'];
-        var result = await SwalDark.fire({
-            title: 'Editar Usuario (ID: ' + userId + ')',
-            html:
-                '<div style="text-align:left;">' +
-                '<label style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.6px;">Nombre</label>' +
-                '<input id="swalEditNombre" class="swal2-input" style="margin-top:6px;width:100%;box-sizing:border-box;" value="' + nombreActual + '">' +
-                '<label style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.6px;margin-top:14px;display:block;">Rol</label>' +
-                '<select id="swalEditRol" class="swal2-input" style="margin-top:6px;width:100%;box-sizing:border-box;">' +
-                    '<option value="Admin"' + (rolActual === 'Admin' ? ' selected' : '') + '>Admin</option>' +
-                    '<option value="Gerente"' + (rolActual === 'Gerente' ? ' selected' : '') + '>Gerente</option>' +
-                    '<option value="Vendedor"' + (rolActual === 'Vendedor' ? ' selected' : '') + '>Vendedor</option>' +
-                '</select>' +
-                '</div>',
-            showCancelButton: true,
-            confirmButtonColor: '#0f766e',
-            cancelButtonColor: '#475569',
-            confirmButtonText: 'Guardar Cambios',
-            cancelButtonText: 'Cancelar',
-            preConfirm: function () {
-                var nuevoNombre = document.getElementById('swalEditNombre').value.trim();
-                var nuevoRol = document.getElementById('swalEditRol').value;
-                if (!nuevoNombre || nuevoNombre.length < 3) {
-                    Swal.showValidationMessage('El nombre debe tener al menos 3 caracteres.');
-                    return false;
-                }
-                if (nuevoNombre.length > 30) {
-                    Swal.showValidationMessage('El nombre no debe exceder 30 caracteres.');
-                    return false;
-                }
-                return { nombre: nuevoNombre, rol: nuevoRol };
-            }
-        });
+    var usuarioEditandoId = null;
 
-        if (!result.isConfirmed || !result.value) return;
+    function abrirModalEditarUsuario(userId, nombreActual, rolActual) {
+        usuarioEditandoId = userId;
+        document.getElementById('edit-usr-id').value = userId;
+        document.getElementById('edit-usr-nombre').value = nombreActual;
+        document.getElementById('edit-usr-rol').value = rolActual;
+        var modal = document.getElementById('modalEditarUsuario');
+        if (modal) modal.classList.remove('hidden');
+        setTimeout(function () {
+            var el = document.getElementById('edit-usr-nombre');
+            if (el) el.focus();
+        }, 200);
+    }
+
+    function cerrarModalEditarUsuario() {
+        usuarioEditandoId = null;
+        var modal = document.getElementById('modalEditarUsuario');
+        if (modal) modal.classList.add('hidden');
+        var form = document.getElementById('formEditarUsuarioNative');
+        if (form) form.reset();
+    }
+
+    async function guardarEdicionUsuario() {
+        var userId = usuarioEditandoId;
+        var nuevoNombre = document.getElementById('edit-usr-nombre').value.trim();
+        var nuevoRol = document.getElementById('edit-usr-rol').value;
+
+        var errs = [];
+        var eNom = validarTexto(nuevoNombre, 'Nombre', 3, 30);
+        if (eNom) errs.push(eNom);
+        if (nuevoRol !== 'Admin' && nuevoRol !== 'Gerente' && nuevoRol !== 'Vendedor') errs.push('Rol no valido.');
+        if (mostrarErrores(errs)) return;
 
         try {
             var resp = await fetch(API_BASE_URL + '/api/usuarios/' + userId, {
@@ -2044,14 +2041,15 @@
                     'Content-Type': 'application/json',
                     'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
                 },
-                body: JSON.stringify({ nombre: result.value.nombre, rol: result.value.rol })
+                body: JSON.stringify({ nombre: nuevoNombre, rol: nuevoRol })
             });
             var respData = await resp.json().catch(function () { return {}; });
             if (!resp.ok) {
                 SwalDark.fire({ icon: 'error', title: 'Error', text: respData.error || 'No se pudo actualizar el usuario.' });
                 return;
             }
-            registrarAuditoria('Actualizo datos del usuario ID ' + userId + ': nombre=' + result.value.nombre + ', rol=' + result.value.rol, 'Gestion de Usuarios');
+            registrarAuditoria('Actualizo datos del usuario ID ' + userId + ': nombre=' + nuevoNombre + ', rol=' + nuevoRol, 'Gestion de Usuarios');
+            cerrarModalEditarUsuario();
             SwalDark.fire({ icon: 'success', title: 'Usuario actualizado', timer: 1800, showConfirmButton: false });
             cargarUsuarios();
         } catch (err) {
@@ -2059,19 +2057,28 @@
         }
     }
 
-    async function eliminarUsuarioConfirm(userId, nombre) {
-        var result = await SwalDark.fire({
-            icon: 'warning',
-            title: 'Eliminar Usuario',
-            html: '¿Estas seguro de eliminar a <strong>' + nombre + '</strong> (ID: ' + userId + ')?<br><br>Esta accion no se puede deshacer.',
-            showCancelButton: true,
-            confirmButtonColor: '#dc2626',
-            cancelButtonColor: '#475569',
-            confirmButtonText: 'Si, eliminar',
-            cancelButtonText: 'Cancelar'
-        });
+    function abrirModalEliminarUsuario(userId, nombre) {
+        document.getElementById('delUsrMensaje').innerHTML = '¿Estás seguro de eliminar a <strong>' + sanitizar(nombre) + '</strong>?';
+        var modal = document.getElementById('modalEliminarUsuario');
+        if (modal) modal.classList.remove('hidden');
+        modal._delUserId = userId;
+        modal._delNombre = nombre;
+        lucide.createIcons();
+    }
 
-        if (!result.isConfirmed) return;
+    function cerrarModalEliminarUsuario() {
+        var modal = document.getElementById('modalEliminarUsuario');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal._delUserId = null;
+            modal._delNombre = null;
+        }
+    }
+
+    async function confirmarEliminarUsuario() {
+        var modal = document.getElementById('modalEliminarUsuario');
+        var userId = modal._delUserId;
+        var nombre = modal._delNombre;
 
         try {
             var resp = await fetch(API_BASE_URL + '/api/usuarios/' + userId, {
@@ -2084,13 +2091,16 @@
             var respData = await resp.json().catch(function () { return {}; });
             if (!resp.ok) {
                 SwalDark.fire({ icon: 'error', title: 'Error', text: respData.error || 'No se pudo eliminar el usuario.' });
+                cerrarModalEliminarUsuario();
                 return;
             }
             registrarAuditoria('Elimino usuario: ' + nombre + ' (ID: ' + userId + ')', 'Gestion de Usuarios');
+            cerrarModalEliminarUsuario();
             SwalDark.fire({ icon: 'success', title: 'Usuario eliminado', text: nombre + ' ha sido eliminado del sistema.', timer: 2000, showConfirmButton: false });
             cargarUsuarios();
         } catch (err) {
             SwalDark.fire({ icon: 'error', title: 'Error de conexion', text: 'No se pudo contactar al servidor.' });
+            cerrarModalEliminarUsuario();
         }
     }
 
@@ -2834,6 +2844,26 @@
             }
         });
     }
+
+    var cerrarModalEditUsr = document.getElementById('btnCerrarModalEditUsr');
+    var cancelarModalEditUsr = document.getElementById('btnCancelarModalEditUsr');
+    if (cerrarModalEditUsr) cerrarModalEditUsr.addEventListener('click', cerrarModalEditarUsuario);
+    if (cancelarModalEditUsr) cancelarModalEditUsr.addEventListener('click', cerrarModalEditarUsuario);
+
+    var formEditUsrNative = document.getElementById('formEditarUsuarioNative');
+    if (formEditUsrNative) {
+        formEditUsrNative.addEventListener('submit', function (e) {
+            e.preventDefault();
+            guardarEdicionUsuario();
+        });
+    }
+
+    var cerrarModalDelUsr = document.getElementById('btnCerrarModalDelUsr');
+    var cancelarModalDelUsr = document.getElementById('btnCancelarModalDelUsr');
+    var confirmarModalDelUsr = document.getElementById('btnConfirmarModalDelUsr');
+    if (cerrarModalDelUsr) cerrarModalDelUsr.addEventListener('click', cerrarModalEliminarUsuario);
+    if (cancelarModalDelUsr) cancelarModalDelUsr.addEventListener('click', cerrarModalEliminarUsuario);
+    if (confirmarModalDelUsr) confirmarModalDelUsr.addEventListener('click', confirmarEliminarUsuario);
 
     window.abrirPerfilGlobal = function () { cerrarDropdowns(); abrirPerfil().catch(function () {}); };
     window.cerrarSesionGlobal = function () { cerrarDropdowns(); cerrarSesion(); };

@@ -239,6 +239,56 @@
         </div>
     </div>
 
+    <!-- Modal Nativo: Editar Usuario -->
+    <div id="modalEditarUsuario" class="modal-native-overlay hidden">
+        <div class="modal-native-card">
+            <div class="modal-native-header">
+                <h2 class="modal-native-title">Editar Usuario</h2>
+                <button id="btnCerrarModalEditUsr" class="modal-native-close">&times;</button>
+            </div>
+            <form id="formEditarUsuarioNative" class="modal-native-form" autocomplete="off" novalidate>
+                <input type="hidden" id="edit-usr-id">
+                <div class="modal-native-field">
+                    <label for="edit-usr-nombre">Nombre</label>
+                    <input type="text" id="edit-usr-nombre" placeholder="Nombre de usuario" required maxlength="30">
+                </div>
+                <div class="modal-native-field">
+                    <label for="edit-usr-rol">Rol</label>
+                    <select id="edit-usr-rol">
+                        <option value="Admin">Admin</option>
+                        <option value="Gerente">Gerente</option>
+                        <option value="Vendedor">Vendedor</option>
+                    </select>
+                </div>
+                <div class="modal-native-actions">
+                    <button type="button" id="btnCancelarModalEditUsr" class="modal-native-btn-cancel">Cancelar</button>
+                    <button type="submit" class="modal-native-btn-save">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Nativo: Confirmar Eliminacion de Usuario -->
+    <div id="modalEliminarUsuario" class="modal-native-overlay hidden">
+        <div class="modal-native-card modal-native-card-sm">
+            <div class="modal-native-header">
+                <h2 class="modal-native-title">Eliminar Usuario</h2>
+                <button id="btnCerrarModalDelUsr" class="modal-native-close">&times;</button>
+            </div>
+            <div class="modal-native-body">
+                <div class="modal-native-icon-warn">
+                    <i data-lucide="triangle-alert"></i>
+                </div>
+                <p class="modal-native-message" id="delUsrMensaje">¿Estás seguro de eliminar este usuario?</p>
+                <p class="modal-native-submessage">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-native-actions">
+                <button type="button" id="btnCancelarModalDelUsr" class="modal-native-btn-cancel">Cancelar</button>
+                <button type="button" id="btnConfirmarModalDelUsr" class="modal-native-btn-danger">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
