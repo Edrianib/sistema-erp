@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP &mdash; Sistema de Gestión Empresarial</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <a href="#mainContent" class="skip-link">Saltar al contenido principal</a>
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-bg-decor">
+            <div class="login-orbit"></div>
+            <div class="login-orbit login-orbit-2"></div>
+            <div class="login-dots"></div>
+        </div>
+        <div class="login-card">
+            <div class="login-card-inner">
+                <div class="login-icon-wrap">
+                    <svg class="login-shield" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 4L6 12v12c0 12.4 7.6 23.9 18 28 10.4-4.1 18-15.6 18-28V12L24 4z" stroke="url(#loginGrad)" stroke-width="2.2" fill="none"/>
+                        <path d="M20 24l3 3 6-7" stroke="url(#loginGrad)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        <defs><linearGradient id="loginGrad" x1="4" y1="4" x2="44" y2="44"><stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs>
+                    </svg>
+                </div>
+                <div class="login-header">
+                    <div class="login-brand">
+                        <span class="login-brand-bold">ERP</span>
+                        <span class="login-brand-light">System</span>
+                    </div>
+                    <p class="login-subtitle">Sistema de Gesti&oacute;n Empresarial</p>
+                </div>
+                <form class="login-form" id="loginForm" autocomplete="off" novalidate>
+                    <div class="login-field">
+                        <label for="loginUser">
+                            <i data-lucide="user" class="login-field-icon"></i> Usuario
+                        </label>
+                        <input type="text" id="loginUser" placeholder="Ingresa tu usuario" autofocus required maxlength="50">
+                    </div>
+                    <div class="login-field">
+                        <label for="loginPass">
+                            <i data-lucide="lock" class="login-field-icon"></i> Contrase&ntilde;a
+                        </label>
+                        <div class="login-pass-wrap">
+                            <input type="password" id="loginPass" placeholder="Ingresa tu contrase&ntilde;a" required maxlength="50">
+                            <button type="button" class="login-pass-toggle" id="togglePass" tabindex="-1" aria-label="Mostrar contrase&ntilde;a">
+                                <i data-lucide="eye" class="toggle-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="login-error" id="loginError"></div>
+                    <button type="submit" class="login-btn" id="loginBtn">
+                        <span>Iniciar Sesi&oacute;n</span>
+                        <i data-lucide="arrow-right" class="login-btn-icon"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="layout" id="appLayout">
+
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <span class="brand-bold">ERP</span>
+                    <span class="brand-light">System</span>
+                </div>
+                <button class="collapse-btn" id="collapseBtn" title="Colapsar / Expandir menu">
+                    <span class="icon-hamburger"></span>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item active" data-section="dashboard">
+                        <i data-lucide="chart-pie" class="nav-icon"></i>
+                        <span class="nav-text">Dashboard / IA</span>
+                    </li>
+                    <li class="nav-item" data-section="ventas">
+                        <i data-lucide="shopping-cart" class="nav-icon"></i>
+                        <span class="nav-text">Ventas</span>
+                    </li>
+                    <li class="nav-item" data-section="inventario">
+                        <i data-lucide="package" class="nav-icon"></i>
+                        <span class="nav-text">Inventario</span>
+                    </li>
+                    <li class="nav-item" data-section="seguridad">
+                        <i data-lucide="shield" class="nav-icon"></i>
+                        <span class="nav-text">Seguridad</span>
+                    </li>
+                    <li class="nav-item" data-section="compras">
+                        <i data-lucide="truck" class="nav-icon"></i>
+                        <span class="nav-text">Compras / Proveedores</span>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-logout">
+                <button class="nav-logout" id="btnSidebarLogout">
+                    <i data-lucide="log-out" class="nav-icon"></i>
+                    <span class="nav-text">Cerrar Sesión</span>
+                </button>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="avatar">
+                        <span>A</span>
+                    </div>
+                    <div class="user-details">
+                        <span class="user-name">Admin</span>
+                        <span class="user-role">Administrador</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content" id="mainContent">
+            <header class="topbar">
+                <button class="hamburger-btn" id="hamburgerBtn" title="Menu" aria-label="Abrir menu">
+                    <span class="icon-hamburger"></span>
+                </button>
+                <h1 class="page-title" id="pageTitle">Dashboard / IA</h1>
+                <div class="topbar-actions">
+                    <div class="search-box">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" placeholder="Buscar...">
+                    </div>
+                    <button class="icon-btn btn-notificaciones" title="Notificaciones">
+                        <i data-lucide="bell"></i>
+                    </button>
+                </div>
+            </header>
+
+            <section class="content-area" id="contentArea">
+            </section>
+
+            <footer class="content-footer">
+                <p>&copy; 2026 ERP System. Todos los derechos reservados.</p>
+            </footer>
+        </main>
+
+    </div>
+
+    <!-- Copiloto Financiero ERP -->
+    <button id="copilotTrigger" class="copilot-trigger" title="Copiloto Financiero">
+        <i data-lucide="bot"></i>
+    </button>
+    <div id="copilotWindow" class="copilot-window">
+        <div class="copilot-header">
+            <div class="copilot-header-left">
+                <span class="copilot-status-dot"></span>
+                <span>Copiloto ERP</span>
+            </div>
+            <button id="copilotClose" class="copilot-close">&times;</button>
+        </div>
+        <div class="copilot-messages" id="copilotMessages">
+            <div class="copilot-msg copilot-msg-bot">Hola, soy tu Copiloto Financiero. Preguntame sobre ventas, inventario o el estado de tu ERP.</div>
+        </div>
+        <div class="copilot-input-area">
+            <input type="text" id="copilotInput" class="copilot-input" placeholder="Escribe tu pregunta..." autocomplete="off">
+            <button id="copilotSend" class="copilot-send">
+                <i data-lucide="send" style="width:16px;height:16px;"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Nativo: Registrar Proveedor -->
+    <div id="modalProveedor" class="modal-native-overlay hidden">
+        <div class="modal-native-card">
+            <div class="modal-native-header">
+                <h2 class="modal-native-title">Registrar Nuevo Proveedor</h2>
+                <button id="btnCerrarModalProv" class="modal-native-close">&times;</button>
+            </div>
+            <form id="formProveedorNative" class="modal-native-form" autocomplete="off" novalidate>
+                <div class="modal-native-field">
+                    <label for="native-prov-nombre">Nombre de la Empresa</label>
+                    <input type="text" id="native-prov-nombre" placeholder="Ej: Tecnologos S.A. de C.V." required maxlength="100">
+                </div>
+                <div class="modal-native-field">
+                    <label for="native-prov-contacto">Contacto Principal</label>
+                    <input type="text" id="native-prov-contacto" placeholder="Ej: Carlos M." required maxlength="100">
+                </div>
+                <div class="modal-native-field">
+                    <label for="native-prov-telefono">Telefono</label>
+                    <input type="tel" id="native-prov-telefono" placeholder="Ej: +52 55 1234 5678" maxlength="20">
+                </div>
+                <div class="modal-native-field">
+                    <label for="native-prov-email">Email</label>
+                    <input type="email" id="native-prov-email" placeholder="Ej: contacto@proveedor.com" maxlength="100">
+                </div>
+                <div class="modal-native-actions">
+                    <button type="button" id="btnCancelarModalProv" class="modal-native-btn-cancel">Cancelar</button>
+                    <button type="submit" class="modal-native-btn-save">Registrar Proveedor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Nativo: Crear Usuario -->
+    <div id="modalUsuario" class="modal-native-overlay hidden">
+        <div class="modal-native-card">
+            <div class="modal-native-header">
+                <h2 class="modal-native-title">Crear Usuario</h2>
+                <button id="btnCerrarModalUsr" class="modal-native-close">&times;</button>
+            </div>
+            <form id="formUsuarioNative" class="modal-native-form" autocomplete="off" novalidate>
+                <div class="modal-native-field">
+                    <label for="native-usr-nombre">Nombre</label>
+                    <input type="text" id="native-usr-nombre" placeholder="Nombre de usuario" required maxlength="30">
+                </div>
+                <div class="modal-native-field">
+                    <label for="native-usr-password">Contrasena</label>
+                    <input type="password" id="native-usr-password" placeholder="Contrasena" required minlength="3" maxlength="50">
+                </div>
+                <div class="modal-native-field">
+                    <label for="native-usr-rol">Rol</label>
+                    <select id="native-usr-rol">
+                        <option value="Admin">Admin</option>
+                        <option value="Gerente">Gerente</option>
+                        <option value="Vendedor">Vendedor</option>
+                    </select>
+                </div>
+                <div class="modal-native-actions">
+                    <button type="button" id="btnCancelarModalUsr" class="modal-native-btn-cancel">Cancelar</button>
+                    <button type="submit" class="modal-native-btn-save">Crear Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="./js/supabase-config.js"></script>
+    <script src="./js/app.js"></script>
+</body>
+</html>

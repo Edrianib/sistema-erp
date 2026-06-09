@@ -1,0 +1,43 @@
+# ============================================================
+# ERP SYSTEM · .gitignore
+# ============================================================
+
+# Dependencias
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Variables de entorno — NUNCA subir
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / dist
+dist/
+build/
+*.log
+
+# ============================================================
+# NOTA DE SEGURIDAD:
+# backend/.env contiene DEEPSEEK_API_KEY
+# NUNCA se sube al repositorio. Ya está en .gitignore.
+# Si ya se subió por error, rotá la key en:
+# https://platform.deepseek.com/api_keys
+# ============================================================
