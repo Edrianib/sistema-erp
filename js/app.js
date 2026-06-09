@@ -1964,6 +1964,7 @@
                 : 'Nunca';
 
             var soyYo = usuarioActivo && String(usuarioActivo.id) === String(u.id);
+            var esAdmin = u.rol === 'Admin';
             h += '<tr>' +
                 '<td><strong>' + sanitizar(u.nombre || '—') + '</strong>' + (soyYo ? ' <span class="badge" style="background:rgba(45,212,191,.12);color:#2dd4bf;">Tú</span>' : '') + '</td>' +
                 '<td>' + u.id + '</td>' +
@@ -1973,7 +1974,7 @@
                     '<button class="btn-restaurar btn-editar-usuario" data-id="' + u.id + '" data-nombre="' + sanitizar(u.nombre || '') + '" data-rol="' + (u.rol || '') + '" title="Editar usuario">' +
                         '<i data-lucide="pencil"></i>' +
                     '</button> ' +
-                    (soyYo ? '' : '<button class="btn-eliminar btn-eliminar-usuario" data-id="' + u.id + '" data-nombre="' + sanitizar(u.nombre || '') + '" title="Eliminar usuario"><i data-lucide="trash-2"></i></button>') +
+                    (soyYo || esAdmin ? '' : '<button class="btn-eliminar btn-eliminar-usuario" data-id="' + u.id + '" data-nombre="' + sanitizar(u.nombre || '') + '" title="Eliminar usuario"><i data-lucide="trash-2"></i></button>') +
                 '</td>' +
             '</tr>';
         }

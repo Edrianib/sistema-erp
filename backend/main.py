@@ -597,6 +597,10 @@ async def eliminar_usuario(user_id: int, request: Request):
     if requester_id == str(user_id):
         return JSONResponse(status_code=400, content={"error": "No puedes eliminar tu propio usuario."})
 
+    target_user = await _verificar_admin(str(user_id))
+    if target_user and target_user.get("rol") == "Admin":
+        return JSONResponse(status_code=403, content={"error": "No se pueden eliminar cuentas de Administrador."})
+
     try:
         resp = await _supabase_admin_request("DELETE", f"/rest/v1/usuarios?id=eq.{user_id}")
         if resp.status_code not in (200, 204):
