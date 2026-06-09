@@ -110,12 +110,16 @@
     function aplicarRestriccionesRol() {
         var navDashboard = document.querySelector('.nav-item[data-section="dashboard"]');
         var navCompras   = document.querySelector('.nav-item[data-section="compras"]');
+        var navGestionUsuarios = document.querySelector('.nav-item-admin-only');
         if (usuarioActivo.rol === 'Vendedor') {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navCompras) navCompras.style.display = 'none';
         } else {
             if (navDashboard) navDashboard.style.display = '';
             if (navCompras) navCompras.style.display = '';
+        }
+        if (navGestionUsuarios) {
+            navGestionUsuarios.style.display = usuarioActivo.rol === 'Admin' ? '' : 'none';
         }
     }
 
@@ -1907,6 +1911,235 @@
     }
 
     /* =================================================================
+       MÓDULO: GESTIÓN DE USUARIOS (ADMIN)
+    ================================================================= */
+    var usuariosCache = [];
+
+    async function cargarUsuarios() {
+        var tbody = document.getElementById('usuariosTbody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--subtle);">Cargando...</td></tr>';
+
+        try {
+            var resp = await fetch(API_BASE_URL + '/api/usuarios', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                }
+            });
+            if (!resp.ok) {
+                var errData = null;
+                try { errData = await resp.json(); } catch (e) {}
+                var msg = errData && errData.error ? errData.error : 'Error al cargar usuarios (HTTP ' + resp.status + ')';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);">' + msg + '</td></tr>';
+                return;
+            }
+            var data = await resp.json();
+            usuariosCache = data.usuarios || [];
+            renderTablaUsuarios();
+        } catch (err) {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);">Error de conexion con el servidor.</td></tr>';
+        }
+    }
+
+    function renderTablaUsuarios() {
+        var tbody = document.getElementById('usuariosTbody');
+        if (!tbody) return;
+
+        if (usuariosCache.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--subtle);">No hay usuarios registrados.</td></tr>';
+            return;
+        }
+
+        var h = '';
+        for (var i = 0; i < usuariosCache.length; i++) {
+            var u = usuariosCache[i];
+            var rolBadge = '';
+            if (u.rol === 'Admin') rolBadge = '<span class="badge" style="background:rgba(45,212,191,.12);color:#2dd4bf;">Admin</span>';
+            else if (u.rol === 'Gerente') rolBadge = '<span class="badge" style="background:rgba(250,204,21,.12);color:#facc15;">Gerente</span>';
+            else rolBadge = '<span class="badge" style="background:rgba(148,163,184,.12);color:#94a3b8;">Vendedor</span>';
+
+            var ultimo = u.ultimo_acceso
+                ? new Date(u.ultimo_acceso).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })
+                : 'Nunca';
+
+            var soyYo = usuarioActivo && String(usuarioActivo.id) === String(u.id);
+            h += '<tr>' +
+                '<td><strong>' + sanitizar(u.nombre || '—') + '</strong>' + (soyYo ? ' <span class="badge" style="background:rgba(45,212,191,.12);color:#2dd4bf;">Tú</span>' : '') + '</td>' +
+                '<td>' + u.id + '</td>' +
+                '<td>' + rolBadge + '</td>' +
+                '<td>' + ultimo + '</td>' +
+                '<td>' +
+                    '<button class="btn-restaurar btn-editar-usuario" data-id="' + u.id + '" data-nombre="' + sanitizar(u.nombre || '') + '" data-rol="' + (u.rol || '') + '" title="Editar usuario">' +
+                        '<i data-lucide="pencil"></i>' +
+                    '</button> ' +
+                    (soyYo ? '' : '<button class="btn-eliminar btn-eliminar-usuario" data-id="' + u.id + '" data-nombre="' + sanitizar(u.nombre || '') + '" title="Eliminar usuario"><i data-lucide="trash-2"></i></button>') +
+                '</td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = h;
+        lucide.createIcons();
+
+        var btnsEditar = document.querySelectorAll('.btn-editar-usuario');
+        for (var ei = 0; ei < btnsEditar.length; ei++) {
+            btnsEditar[ei].addEventListener('click', function () {
+                var id = this.getAttribute('data-id');
+                var nombre = this.getAttribute('data-nombre');
+                var rol = this.getAttribute('data-rol');
+                editarUsuario(id, nombre, rol);
+            });
+        }
+
+        var btnsEliminar = document.querySelectorAll('.btn-eliminar-usuario');
+        for (var di = 0; di < btnsEliminar.length; di++) {
+            btnsEliminar[di].addEventListener('click', function () {
+                var id = this.getAttribute('data-id');
+                var nombre = this.getAttribute('data-nombre');
+                eliminarUsuarioConfirm(id, nombre);
+            });
+        }
+    }
+
+    async function editarUsuario(userId, nombreActual, rolActual) {
+        var rolOptions = ['Admin', 'Gerente', 'Vendedor'];
+        var result = await SwalDark.fire({
+            title: 'Editar Usuario (ID: ' + userId + ')',
+            html:
+                '<div style="text-align:left;">' +
+                '<label style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.6px;">Nombre</label>' +
+                '<input id="swalEditNombre" class="swal2-input" style="margin-top:6px;width:100%;box-sizing:border-box;" value="' + nombreActual + '">' +
+                '<label style="font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:.6px;margin-top:14px;display:block;">Rol</label>' +
+                '<select id="swalEditRol" class="swal2-input" style="margin-top:6px;width:100%;box-sizing:border-box;">' +
+                    '<option value="Admin"' + (rolActual === 'Admin' ? ' selected' : '') + '>Admin</option>' +
+                    '<option value="Gerente"' + (rolActual === 'Gerente' ? ' selected' : '') + '>Gerente</option>' +
+                    '<option value="Vendedor"' + (rolActual === 'Vendedor' ? ' selected' : '') + '>Vendedor</option>' +
+                '</select>' +
+                '</div>',
+            showCancelButton: true,
+            confirmButtonColor: '#0f766e',
+            cancelButtonColor: '#475569',
+            confirmButtonText: 'Guardar Cambios',
+            cancelButtonText: 'Cancelar',
+            preConfirm: function () {
+                var nuevoNombre = document.getElementById('swalEditNombre').value.trim();
+                var nuevoRol = document.getElementById('swalEditRol').value;
+                if (!nuevoNombre || nuevoNombre.length < 3) {
+                    Swal.showValidationMessage('El nombre debe tener al menos 3 caracteres.');
+                    return false;
+                }
+                if (nuevoNombre.length > 30) {
+                    Swal.showValidationMessage('El nombre no debe exceder 30 caracteres.');
+                    return false;
+                }
+                return { nombre: nuevoNombre, rol: nuevoRol };
+            }
+        });
+
+        if (!result.isConfirmed || !result.value) return;
+
+        try {
+            var resp = await fetch(API_BASE_URL + '/api/usuarios/' + userId, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                },
+                body: JSON.stringify({ nombre: result.value.nombre, rol: result.value.rol })
+            });
+            var respData = await resp.json().catch(function () { return {}; });
+            if (!resp.ok) {
+                SwalDark.fire({ icon: 'error', title: 'Error', text: respData.error || 'No se pudo actualizar el usuario.' });
+                return;
+            }
+            registrarAuditoria('Actualizo datos del usuario ID ' + userId + ': nombre=' + result.value.nombre + ', rol=' + result.value.rol, 'Gestion de Usuarios');
+            SwalDark.fire({ icon: 'success', title: 'Usuario actualizado', timer: 1800, showConfirmButton: false });
+            cargarUsuarios();
+        } catch (err) {
+            SwalDark.fire({ icon: 'error', title: 'Error de conexion', text: 'No se pudo contactar al servidor.' });
+        }
+    }
+
+    async function eliminarUsuarioConfirm(userId, nombre) {
+        var result = await SwalDark.fire({
+            icon: 'warning',
+            title: 'Eliminar Usuario',
+            html: '¿Estas seguro de eliminar a <strong>' + nombre + '</strong> (ID: ' + userId + ')?<br><br>Esta accion no se puede deshacer.',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#475569',
+            confirmButtonText: 'Si, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            var resp = await fetch(API_BASE_URL + '/api/usuarios/' + userId, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                }
+            });
+            var respData = await resp.json().catch(function () { return {}; });
+            if (!resp.ok) {
+                SwalDark.fire({ icon: 'error', title: 'Error', text: respData.error || 'No se pudo eliminar el usuario.' });
+                return;
+            }
+            registrarAuditoria('Elimino usuario: ' + nombre + ' (ID: ' + userId + ')', 'Gestion de Usuarios');
+            SwalDark.fire({ icon: 'success', title: 'Usuario eliminado', text: nombre + ' ha sido eliminado del sistema.', timer: 2000, showConfirmButton: false });
+            cargarUsuarios();
+        } catch (err) {
+            SwalDark.fire({ icon: 'error', title: 'Error de conexion', text: 'No se pudo contactar al servidor.' });
+        }
+    }
+
+    function renderGestionUsuarios() {
+        return '' +
+        '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">' +
+            '<h2>Gestion de Usuarios</h2>' +
+            '<button id="btnRefrescarUsuarios" class="btn-outline" style="font-size:12px;padding:8px 16px;">' +
+                '<i data-lucide="refresh-cw" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Refrescar' +
+            '</button>' +
+        '</div>' +
+        '<div class="stats-grid">' +
+            '<div class="stat-card">' +
+                '<div class="stat-card-header">' +
+                    '<span class="stat-card-label">Total Usuarios</span>' +
+                    '<i data-lucide="users" class="stat-icon"></i>' +
+                '</div>' +
+                '<div class="stat-card-value" id="kpiTotalUsuarios">—</div>' +
+                '<div class="stat-card-change">Registrados en el sistema</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+                '<div class="stat-card-header">' +
+                    '<span class="stat-card-label">Administradores</span>' +
+                    '<i data-lucide="shield-check" class="stat-icon"></i>' +
+                '</div>' +
+                '<div class="stat-card-value" id="kpiAdmins">—</div>' +
+                '<div class="stat-card-change">Acceso total al sistema</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+                '<div class="stat-card-header">' +
+                    '<span class="stat-card-label">Gerentes / Vendedores</span>' +
+                    '<i data-lucide="user-check" class="stat-icon"></i>' +
+                '</div>' +
+                '<div class="stat-card-value" id="kpiOtrosRoles">—</div>' +
+                '<div class="stat-card-change">Gerentes y Vendedores</div>' +
+            '</div>' +
+        '</div>' +
+        '<div class="content-panel full-width" style="margin-top:5px;">' +
+            '<div class="panel-title"><i data-lucide="users" class="panel-icon"></i> Listado de Usuarios</div>' +
+            '<div class="table-scroll">' +
+            '<table class="table-mini" id="tablaUsuarios">' +
+                '<thead><tr><th>Nombre</th><th>ID</th><th>Rol</th><th>Ultimo Acceso</th><th>Acciones</th></tr></thead>' +
+                '<tbody id="usuariosTbody"><tr><td colspan="5" style="text-align:center;color:var(--subtle);">Cargando...</td></tr></tbody>' +
+            '</table>' +
+            '</div>' +
+        '</div>';
+    }
+
+    /* =================================================================
        MÓDULO DE COMPRAS — PROVEEDORES (SUPABASE)
     ================================================================= */
     var proveedoresCache = [];
@@ -2269,6 +2502,7 @@
         ventas:     renderVentas,
         inventario: renderInventario,
         seguridad:  renderSeguridad,
+        'gestion-usuarios': renderGestionUsuarios,
         compras:    renderCompras
     };
 
@@ -2277,12 +2511,18 @@
         ventas:     'Ventas',
         inventario: 'Inventario',
         seguridad:  'Seguridad',
+        'gestion-usuarios': 'Gestión de Usuarios',
         compras:    'Compras / Proveedores'
     };
 
     function navigateTo(sectionKey) {
         if (usuarioActivo && usuarioActivo.rol === 'Vendedor' && sectionKey === 'dashboard') {
             sectionKey = 'ventas';
+        }
+
+        if (sectionKey === 'gestion-usuarios' && usuarioActivo && usuarioActivo.rol !== 'Admin') {
+            SwalDark.fire({ icon: 'warning', title: 'Acceso denegado', text: 'Solo los administradores pueden gestionar usuarios.', timer: 2500, showConfirmButton: false });
+            return;
         }
 
         setActiveNav(sectionKey);
@@ -2410,6 +2650,29 @@
             if (btnCrear) {
                 btnCrear.addEventListener('click', function () {
                     crearNuevoUsuario();
+                });
+            }
+        }
+
+        if (sectionKey === 'gestion-usuarios') {
+            cargarUsuarios().then(function () {
+                var admins = 0;
+                var otros = 0;
+                for (var ui = 0; ui < usuariosCache.length; ui++) {
+                    if (usuariosCache[ui].rol === 'Admin') admins++;
+                    else otros++;
+                }
+                var kpiTotal = document.getElementById('kpiTotalUsuarios');
+                var kpiAdmin = document.getElementById('kpiAdmins');
+                var kpiOtros = document.getElementById('kpiOtrosRoles');
+                if (kpiTotal) kpiTotal.textContent = usuariosCache.length;
+                if (kpiAdmin) kpiAdmin.textContent = admins;
+                if (kpiOtros) kpiOtros.textContent = otros;
+            });
+            var btnRefrescar = document.getElementById('btnRefrescarUsuarios');
+            if (btnRefrescar) {
+                btnRefrescar.addEventListener('click', function () {
+                    cargarUsuarios();
                 });
             }
         }

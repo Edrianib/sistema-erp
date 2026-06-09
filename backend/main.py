@@ -2,9 +2,9 @@ import os
 import json
 import logging
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from pydantic import BaseModel
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, Optional, List
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
@@ -89,6 +89,9 @@ async def health():
             "POST /api/autocompletar",
             "POST /api/copiloto",
             "POST /api/reporte-ejecutivo",
+            "GET  /api/usuarios",
+            "PUT  /api/usuarios/{user_id}",
+            "DELETE /api/usuarios/{user_id}",
         ],
     }
 
@@ -460,3 +463,139 @@ async def reporte_ejecutivo(payload: ReporteEjecutivoRequest):
             "nivel_stock_critico": payload.nivel_stock_critico,
         },
     })
+
+
+# ---------- Modelos para Gestion de Usuarios ----------
+class UsuarioUpdateRequest(BaseModel):
+    nombre: Optional[str] = None
+    rol: Optional[str] = None
+
+
+# ---------- Helper: Cliente Admin de Supabase (via REST API) ----------
+async def _supabase_admin_request(method: str, path: str, json_body: dict = None) -> httpx.Response:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError("SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configuradas.")
+    url = f"{SUPABASE_URL}{path}"
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        if method == "GET":
+            return await client.get(url, headers=headers)
+        elif method == "PATCH":
+            return await client.patch(url, headers=headers, json=json_body)
+        elif method == "DELETE":
+            return await client.delete(url, headers=headers)
+        else:
+            raise ValueError(f"Metodo HTTP no soportado: {method}")
+
+
+# ---------- Helper: Verificar que el usuario solicitante es Admin ----------
+async def _verificar_admin(user_id_header: str) -> Optional[dict]:
+    if not user_id_header:
+        return None
+    try:
+        resp = await _supabase_admin_request(
+            "GET",
+            f"/rest/v1/usuarios?id=eq.{user_id_header}&select=*"
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and len(data) > 0:
+                return data[0]
+    except Exception as e:
+        logger.error("Error al verificar admin: %s", str(e))
+    return None
+
+
+# ---------- Endpoints de Gestion de Usuarios ----------
+@app.get("/api/usuarios")
+async def listar_usuarios(request: Request):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    admin_user = await _verificar_admin(user_id)
+    if not admin_user or admin_user.get("rol") != "Admin":
+        return JSONResponse(status_code=403, content={"error": "Acceso denegado. Se requiere rol de Administrador."})
+
+    try:
+        resp = await _supabase_admin_request("GET", "/rest/v1/usuarios?select=id,nombre,rol,ultimo_acceso&order=id")
+        if resp.status_code != 200:
+            return JSONResponse(status_code=502, content={"error": "Error al consultar usuarios en Supabase."})
+        usuarios = resp.json()
+        return JSONResponse(content={"usuarios": usuarios, "total": len(usuarios)})
+    except Exception as e:
+        logger.error("Error en GET /api/usuarios: %s", str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+@app.put("/api/usuarios/{user_id}")
+async def actualizar_usuario(user_id: int, payload: UsuarioUpdateRequest, request: Request):
+    requester_id = request.headers.get("X-User-Id", "").strip()
+    if not requester_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    admin_user = await _verificar_admin(requester_id)
+    if not admin_user or admin_user.get("rol") != "Admin":
+        return JSONResponse(status_code=403, content={"error": "Acceso denegado. Se requiere rol de Administrador."})
+
+    if payload.nombre is None and payload.rol is None:
+        return JSONResponse(status_code=400, content={"error": "Debe proporcionar al menos 'nombre' o 'rol' para actualizar."})
+
+    if payload.rol is not None and payload.rol not in ("Admin", "Gerente", "Vendedor"):
+        return JSONResponse(status_code=400, content={"error": "Rol invalido. Use: Admin, Gerente o Vendedor."})
+
+    if payload.nombre is not None and (len(payload.nombre.strip()) < 3):
+        return JSONResponse(status_code=400, content={"error": "El nombre debe tener al menos 3 caracteres."})
+
+    if requester_id == str(user_id) and payload.rol is not None and payload.rol != "Admin":
+        return JSONResponse(status_code=400, content={"error": "No puedes quitarte el rol de Administrador a ti mismo."})
+
+    update_data = {}
+    if payload.nombre is not None:
+        update_data["nombre"] = payload.nombre.strip()
+    if payload.rol is not None:
+        update_data["rol"] = payload.rol.strip()
+
+    try:
+        resp = await _supabase_admin_request(
+            "PATCH",
+            f"/rest/v1/usuarios?id=eq.{user_id}",
+            json_body=update_data
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Error al actualizar usuario %d: %s", user_id, resp.text)
+            return JSONResponse(status_code=502, content={"error": "Error al actualizar usuario en Supabase."})
+        logger.info("Usuario %d actualizado por admin %s: %s", user_id, requester_id, update_data)
+        return JSONResponse(content={"mensaje": "Usuario actualizado correctamente.", "actualizado": update_data})
+    except Exception as e:
+        logger.error("Error en PUT /api/usuarios/%d: %s", user_id, str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+@app.delete("/api/usuarios/{user_id}")
+async def eliminar_usuario(user_id: int, request: Request):
+    requester_id = request.headers.get("X-User-Id", "").strip()
+    if not requester_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    admin_user = await _verificar_admin(requester_id)
+    if not admin_user or admin_user.get("rol") != "Admin":
+        return JSONResponse(status_code=403, content={"error": "Acceso denegado. Se requiere rol de Administrador."})
+
+    if requester_id == str(user_id):
+        return JSONResponse(status_code=400, content={"error": "No puedes eliminar tu propio usuario."})
+
+    try:
+        resp = await _supabase_admin_request("DELETE", f"/rest/v1/usuarios?id=eq.{user_id}")
+        if resp.status_code not in (200, 204):
+            logger.error("Error al eliminar usuario %d: %s", user_id, resp.text)
+            return JSONResponse(status_code=502, content={"error": "Error al eliminar usuario en Supabase."})
+        logger.info("Usuario %d eliminado por admin %s", user_id, requester_id)
+        return JSONResponse(content={"mensaje": f"Usuario {user_id} eliminado correctamente."})
+    except Exception as e:
+        logger.error("Error en DELETE /api/usuarios/%d: %s", user_id, str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
