@@ -2696,10 +2696,13 @@
                     '<td>' + sanitizar(emp.cargo) + '</td>' +
                     '<td>' + salarioFormateado + '</td>' +
                     '<td>' +
-                        '<button class="btn-outline btn-edit-emp" data-id="' + emp.id + '" style="font-size:11px;padding:4px 10px;margin-right:4px;">' +
+                        '<button class="btn-outline btn-edit-emp" data-id="' + emp.id + '" style="font-size:11px;padding:4px 10px;margin-right:4px;" title="Editar">' +
                             '<i data-lucide="pencil" style="width:13px;height:13px;"></i>' +
                         '</button>' +
-                        '<button class="btn-eliminar btn-del-emp" data-id="' + emp.id + '" data-nombre="' + sanitizarAttr(emp.nombre_completo) + '" style="font-size:11px;padding:4px 10px;">' +
+                        '<button class="btn-outline btn-nov-emp" data-id="' + emp.id + '" data-nombre="' + sanitizarAttr(emp.nombre_completo) + '" style="font-size:11px;padding:4px 10px;margin-right:4px;" title="Registrar Novedad">' +
+                            '<i data-lucide="banknote" style="width:13px;height:13px;"></i>' +
+                        '</button>' +
+                        '<button class="btn-eliminar btn-del-emp" data-id="' + emp.id + '" data-nombre="' + sanitizarAttr(emp.nombre_completo) + '" style="font-size:11px;padding:4px 10px;" title="Desactivar">' +
                             '<i data-lucide="trash-2" style="width:13px;height:13px;"></i>' +
                         '</button>' +
                     '</td>' +
@@ -2728,6 +2731,14 @@
                 abrirModalEditarEmpleado(empId);
             });
         }
+        var novBtns = document.querySelectorAll('.btn-nov-emp');
+        for (var k = 0; k < novBtns.length; k++) {
+            novBtns[k].addEventListener('click', function () {
+                var empId = parseInt(this.getAttribute('data-id'));
+                var empNombre = this.getAttribute('data-nombre') || 'Empleado';
+                abrirModalNovedad(empId, empNombre);
+            });
+        }
         var delBtns = document.querySelectorAll('.btn-del-emp');
         for (var j = 0; j < delBtns.length; j++) {
             delBtns[j].addEventListener('click', function () {
@@ -2749,8 +2760,10 @@
         if (form) form.reset();
         document.getElementById('emp-salario').readOnly = true;
         document.getElementById('emp-salario').value = '';
-        llenarSelectCargos(null);
         modal.classList.remove('hidden');
+        cargarCargos().then(function () {
+            llenarSelectCargos(null);
+        });
         setTimeout(function () {
             var el = document.getElementById('emp-documento');
             if (el) el.focus();
@@ -2771,10 +2784,12 @@
         document.getElementById('emp-id').value = emp.id;
         document.getElementById('emp-documento').value = emp.documento_identidad || '';
         document.getElementById('emp-nombre').value = emp.nombre_completo || '';
-        llenarSelectCargos(emp.cargo || '');
         document.getElementById('emp-salario').readOnly = true;
         document.getElementById('emp-salario').value = emp.salario_base || 0;
         modal.classList.remove('hidden');
+        cargarCargos().then(function () {
+            llenarSelectCargos(emp.cargo || '');
+        });
         setTimeout(function () {
             var el = document.getElementById('emp-documento');
             if (el) el.focus();
@@ -2800,6 +2815,27 @@
     function cerrarModalEliminarEmpleado() {
         var modal = document.getElementById('modalEliminarEmpleado');
         if (modal) modal.classList.add('hidden');
+    }
+
+    function abrirModalNovedad(empId, empNombre) {
+        var modal = document.getElementById('modalNovedad');
+        if (!modal) return;
+        var form = document.getElementById('formNovedadNative');
+        if (form) form.reset();
+        document.getElementById('nov-empleado-id').value = empId;
+        document.getElementById('nov-empleado-nombre').value = empNombre;
+        modal.classList.remove('hidden');
+        setTimeout(function () {
+            var el = document.getElementById('nov-tipo');
+            if (el) el.focus();
+        }, 200);
+    }
+
+    function cerrarModalNovedad() {
+        var modal = document.getElementById('modalNovedad');
+        if (modal) modal.classList.add('hidden');
+        var form = document.getElementById('formNovedadNative');
+        if (form) form.reset();
     }
 
     /* =================================================================
@@ -3200,6 +3236,63 @@
                             icon: 'success',
                             title: 'Empleado desactivado',
                             text: 'El empleado fue removido de la lista activa.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } catch (err) {
+                        SwalDark.fire({ icon: 'error', title: 'Error de conexion', text: err.message || err });
+                    }
+                });
+            }
+
+            var cerrarModalNov = document.getElementById('btnCerrarModalNov');
+            var cancelarModalNov = document.getElementById('btnCancelarModalNov');
+            if (cerrarModalNov) cerrarModalNov.addEventListener('click', cerrarModalNovedad);
+            if (cancelarModalNov) cancelarModalNov.addEventListener('click', cerrarModalNovedad);
+
+            var formNovNative = document.getElementById('formNovedadNative');
+            if (formNovNative) {
+                formNovNative.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    var empId = parseInt(document.getElementById('nov-empleado-id').value);
+                    var tipo = document.getElementById('nov-tipo').value;
+                    var monto = parseFloat(document.getElementById('nov-monto').value);
+                    var concepto = document.getElementById('nov-concepto').value.trim();
+
+                    var errs = [];
+                    if (!empId) errs.push('Empleado invalido.');
+                    if (!tipo) errs.push('Debes seleccionar un tipo de novedad.');
+                    var eMon = validarNumero(monto, 'Monto', 0.01, 99999999);
+                    if (eMon) errs.push(eMon);
+                    var eCon = validarTexto(concepto, 'Concepto', 3, 200);
+                    if (eCon) errs.push(eCon);
+                    if (mostrarErrores(errs)) return;
+
+                    try {
+                        var resp = await fetch(API_BASE_URL + '/api/novedades', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                            },
+                            body: JSON.stringify({
+                                empleado_id: empId,
+                                tipo: tipo,
+                                monto: monto,
+                                concepto: concepto
+                            })
+                        });
+                        if (!resp.ok) {
+                            var errData = await resp.json().catch(function () { return { error: 'Error desconocido' }; });
+                            SwalDark.fire({ icon: 'error', title: 'Error', text: errData.error || 'No se pudo registrar la novedad.' });
+                            return;
+                        }
+                        cerrarModalNovedad();
+                        registrarAuditoria('Registro novedad (' + tipo + ') $' + monto + ' a empleado ' + empId, 'Talento Humano');
+                        SwalDark.fire({
+                            icon: 'success',
+                            title: 'Novedad registrada',
+                            text: tipo + ' por $' + monto.toFixed(2) + ' registrado correctamente.',
                             timer: 2000,
                             showConfirmButton: false
                         });

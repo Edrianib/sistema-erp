@@ -503,6 +503,12 @@ class EmpleadoUpdateRequest(BaseModel):
     cargo: Optional[str] = None
     salario_base: Optional[float] = None
 
+class NovedadCreateRequest(BaseModel):
+    empleado_id: int
+    tipo: str
+    monto: float
+    concepto: str
+
 # ---------- Helper: Cliente Admin de Supabase (via REST API) ----------
 async def _supabase_admin_request(method: str, path: str, json_body: dict = None) -> httpx.Response:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
@@ -780,4 +786,38 @@ async def eliminar_empleado(empleado_id: int, request: Request):
         return JSONResponse(content={"mensaje": f"Empleado {empleado_id} desactivado correctamente (borrado logico)."})
     except Exception as e:
         logger.error("Error en DELETE /api/empleados/%d: %s", empleado_id, str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+# ---------- Endpoints de Novedades de Nomina ----------
+@app.post("/api/novedades")
+async def registrar_novedad(payload: NovedadCreateRequest, request: Request):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    tipos_validos = {"Adelanto de Sueldo", "Bono de Desempeno", "Multa/Deduccion"}
+    if payload.tipo not in tipos_validos:
+        return JSONResponse(status_code=400, content={"error": "Tipo de novedad invalido."})
+    if payload.monto <= 0:
+        return JSONResponse(status_code=400, content={"error": "El monto debe ser mayor a cero."})
+    concepto = payload.concepto.strip()
+    if len(concepto) < 3 or len(concepto) > 200:
+        return JSONResponse(status_code=400, content={"error": "El concepto debe tener entre 3 y 200 caracteres."})
+
+    try:
+        resp = await _supabase_admin_request("POST", "/rest/v1/novedades_nomina", json_body={
+            "empleado_id": payload.empleado_id,
+            "tipo": payload.tipo,
+            "monto": payload.monto,
+            "concepto": concepto,
+            "fecha": None,
+        })
+        if resp.status_code not in (200, 201, 204):
+            logger.error("Error al registrar novedad: %s", resp.text)
+            return JSONResponse(status_code=502, content={"error": "Error al guardar novedad en Supabase."})
+        logger.info("Novedad registrada para empleado %d: %s - $%s", payload.empleado_id, payload.tipo, payload.monto)
+        return JSONResponse(status_code=201, content={"mensaje": "Novedad registrada correctamente."})
+    except Exception as e:
+        logger.error("Error en POST /api/novedades: %s", str(e))
         return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})

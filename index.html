@@ -349,6 +349,44 @@
         </div>
     </div>
 
+    <!-- Modal Nativo: Registrar Novedad de Nomina -->
+    <div id="modalNovedad" class="modal-native-overlay hidden">
+        <div class="modal-native-card">
+            <div class="modal-native-header">
+                <h2 class="modal-native-title">Registrar Novedad</h2>
+                <button id="btnCerrarModalNov" class="modal-native-close">&times;</button>
+            </div>
+            <form id="formNovedadNative" class="modal-native-form" autocomplete="off" novalidate>
+                <input type="hidden" id="nov-empleado-id">
+                <div class="modal-native-field">
+                    <label for="nov-empleado-nombre">Empleado</label>
+                    <input type="text" id="nov-empleado-nombre" readonly>
+                </div>
+                <div class="modal-native-field">
+                    <label for="nov-tipo">Tipo de Novedad</label>
+                    <select id="nov-tipo" required>
+                        <option value="">Seleccionar tipo...</option>
+                        <option value="Adelanto de Sueldo">Adelanto de Sueldo</option>
+                        <option value="Bono de Desempeno">Bono de Desempeno</option>
+                        <option value="Multa/Deduccion">Multa/Deduccion</option>
+                    </select>
+                </div>
+                <div class="modal-native-field">
+                    <label for="nov-monto">Monto a aplicar ($)</label>
+                    <input type="number" id="nov-monto" placeholder="0.00" min="0.01" max="99999999" step="0.01" inputmode="decimal" required>
+                </div>
+                <div class="modal-native-field">
+                    <label for="nov-concepto">Concepto / Razon</label>
+                    <input type="text" id="nov-concepto" placeholder="Ej: Adelanto de quincena" required maxlength="200">
+                </div>
+                <div class="modal-native-actions">
+                    <button type="button" id="btnCancelarModalNov" class="modal-native-btn-cancel">Cancelar</button>
+                    <button type="submit" class="modal-native-btn-save">Registrar Novedad</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
