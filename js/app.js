@@ -2591,6 +2591,56 @@
     ================================================================= */
     var empleadosCache = [];
     var empleadoEditandoId = null;
+    var cargosCache = [];
+
+    async function cargarCargos() {
+        try {
+            var resp = await fetch(API_BASE_URL + '/api/cargos', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                }
+            });
+            if (!resp.ok) {
+                console.error('[cargarCargos] Error HTTP ' + resp.status + ':', await resp.text().catch(function(){return '';}));
+                cargosCache = [];
+                return;
+            }
+            var data = await resp.json();
+            cargosCache = data.cargos || [];
+        } catch (err) {
+            console.error('Error al cargar cargos:', err);
+            cargosCache = [];
+        }
+    }
+
+    function llenarSelectCargos(valorSeleccionado) {
+        var select = document.getElementById('emp-cargo');
+        if (!select) return;
+        select.innerHTML = '<option value="">Seleccionar cargo...</option>';
+        for (var i = 0; i < cargosCache.length; i++) {
+            var c = cargosCache[i];
+            var selected = (valorSeleccionado && c.nombre === valorSeleccionado) ? ' selected' : '';
+            select.innerHTML += '<option value="' + sanitizarAttr(c.nombre) + '" data-salario="' + (c.salario_predeterminado || 0) + '"' + selected + '>' + sanitizar(c.nombre) + '</option>';
+        }
+        if (valorSeleccionado && !select.value) {
+            select.innerHTML += '<option value="' + sanitizarAttr(valorSeleccionado) + '" selected>' + sanitizar(valorSeleccionado) + '</option>';
+        }
+    }
+
+    function autocompletarSalarioDesdeCargo() {
+        var select = document.getElementById('emp-cargo');
+        var salarioInput = document.getElementById('emp-salario');
+        if (!select || !salarioInput) return;
+        var selectedOption = select.options[select.selectedIndex];
+        var salario = selectedOption && selectedOption.getAttribute('data-salario');
+        if (salario !== null && salario !== undefined && salario !== '') {
+            salarioInput.value = parseFloat(salario).toFixed(2);
+        } else {
+            salarioInput.value = '';
+        }
+    }
 
     function renderTalentoHumano() {
         return '' +
@@ -2697,6 +2747,9 @@
         document.getElementById('emp-id').value = '';
         var form = document.getElementById('formEmpleadoNative');
         if (form) form.reset();
+        document.getElementById('emp-salario').readOnly = true;
+        document.getElementById('emp-salario').value = '';
+        llenarSelectCargos(null);
         modal.classList.remove('hidden');
         setTimeout(function () {
             var el = document.getElementById('emp-documento');
@@ -2718,7 +2771,8 @@
         document.getElementById('emp-id').value = emp.id;
         document.getElementById('emp-documento').value = emp.documento_identidad || '';
         document.getElementById('emp-nombre').value = emp.nombre_completo || '';
-        document.getElementById('emp-cargo').value = emp.cargo || '';
+        llenarSelectCargos(emp.cargo || '');
+        document.getElementById('emp-salario').readOnly = true;
         document.getElementById('emp-salario').value = emp.salario_base || 0;
         modal.classList.remove('hidden');
         setTimeout(function () {
@@ -3040,6 +3094,14 @@
             cargarEmpleados().catch(function (err) {
                 console.error('Error al inicializar empleados:', err);
             });
+            cargarCargos().catch(function (err) {
+                console.error('Error al inicializar cargos:', err);
+            });
+
+            var cargoSelect = document.getElementById('emp-cargo');
+            if (cargoSelect) {
+                cargoSelect.addEventListener('change', autocompletarSalarioDesdeCargo);
+            }
 
             var btnNuevoEmp = document.getElementById('btnNuevoEmpleado');
             if (btnNuevoEmp) {
@@ -3057,7 +3119,7 @@
                     e.preventDefault();
                     var doc = document.getElementById('emp-documento').value.trim();
                     var nombre = document.getElementById('emp-nombre').value.trim();
-                    var cargo = document.getElementById('emp-cargo').value.trim();
+                    var cargo = document.getElementById('emp-cargo').value;
                     var salario = parseFloat(document.getElementById('emp-salario').value);
 
                     var errs = [];
@@ -3065,8 +3127,7 @@
                     if (eDoc) errs.push(eDoc);
                     var eNom = validarTexto(nombre, 'Nombre Completo', 3, 100);
                     if (eNom) errs.push(eNom);
-                    var eCar = validarTexto(cargo, 'Cargo', 2, 50);
-                    if (eCar) errs.push(eCar);
+                    if (!cargo) errs.push('Debes seleccionar un cargo de la lista.');
                     var eSal = validarNumero(salario, 'Salario Base', 0, 99999999);
                     if (eSal) errs.push(eSal);
                     if (mostrarErrores(errs)) return;

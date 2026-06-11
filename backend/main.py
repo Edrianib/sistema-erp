@@ -640,6 +640,23 @@ async def eliminar_usuario(user_id: int, request: Request):
 
 
 # ---------- Endpoints de Talento Humano (Empleados) ----------
+@app.get("/api/cargos")
+async def listar_cargos(request: Request):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    try:
+        resp = await _supabase_admin_request("GET", "/rest/v1/cargos_empresa?select=*&order=id")
+        if resp.status_code != 200:
+            return JSONResponse(status_code=502, content={"error": "Error al consultar cargos en Supabase."})
+        cargos = resp.json()
+        return JSONResponse(content={"cargos": cargos, "total": len(cargos)})
+    except Exception as e:
+        logger.error("Error en GET /api/cargos: %s", str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
 @app.get("/api/empleados")
 async def listar_empleados(request: Request, activos: bool = Query(default=True, description="Solo empleados activos")):
     user_id = request.headers.get("X-User-Id", "").strip()
