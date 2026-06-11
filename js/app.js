@@ -2596,14 +2596,16 @@
         return '' +
         '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">' +
             '<h2>Modulo de Talento Humano</h2>' +
-            '<button id="btnNuevoEmpleado" class="btn-outline" style="font-size:12px;padding:8px 16px;">+ Nuevo Empleado</button>' +
+            '<button id="btnNuevoEmpleado" class="login-btn" style="width:auto;padding:8px 20px;font-size:12px;">+ Nuevo Empleado</button>' +
         '</div>' +
-        '<div class="content-panel full-width">' +
-            '<div class="panel-title"><i data-lucide="contact" class="panel-icon"></i> Listado de Empleados Activos</div>' +
+        '<div style="background:#0b0e14;border:1px solid #1f242e;border-radius:14px;padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;font-size:15px;font-weight:700;color:#e2e8f0;">' +
+                '<i data-lucide="contact" style="width:18px;height:18px;color:#0d9488;"></i> Listado de Empleados Activos' +
+            '</div>' +
             '<div class="table-scroll">' +
-            '<table class="table-mini" id="tablaEmpleados">' +
+            '<table class="table-mini" id="tablaEmpleados" style="color:#cbd5e1;">' +
                 '<thead><tr><th>ID</th><th>Documento</th><th>Nombre Completo</th><th>Cargo</th><th>Salario Base</th><th>Acciones</th></tr></thead>' +
-                '<tbody id="empleadosTbody"><tr><td colspan="6" style="text-align:center;color:var(--subtle);">Cargando...</td></tr></tbody>' +
+                '<tbody id="empleadosTbody"><tr><td colspan="6" style="text-align:center;color:#64748b;">Cargando...</td></tr></tbody>' +
             '</table>' +
             '</div>' +
         '</div>';
@@ -2622,6 +2624,9 @@
                 }
             });
             if (!resp.ok) {
+                var errorBody = '';
+                try { errorBody = await resp.text(); } catch (ex) { errorBody = 'No se pudo leer el cuerpo del error'; }
+                console.error('[cargarEmpleados] Error HTTP ' + resp.status + ' (' + resp.statusText + '):', errorBody);
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error al cargar empleados.</td></tr>';
                 empleadosCache = [];
                 return;
@@ -2638,7 +2643,7 @@
                 var salarioFormateado = '$' + Number(emp.salario_base).toLocaleString('es-MX', { minimumFractionDigits: 2 });
                 h += '<tr>' +
                     '<td class="cell-id">EMP-' + emp.id + '</td>' +
-                    '<td>' + sanitizar(emp.documento) + '</td>' +
+                    '<td>' + sanitizar(emp.documento_identidad) + '</td>' +
                     '<td>' + sanitizar(emp.nombre_completo) + '</td>' +
                     '<td>' + sanitizar(emp.cargo) + '</td>' +
                     '<td>' + salarioFormateado + '</td>' +
@@ -2713,7 +2718,7 @@
         document.getElementById('modalEmpleadoTitle').textContent = 'Editar Empleado';
         document.getElementById('btnGuardarEmp').textContent = 'Actualizar Empleado';
         document.getElementById('emp-id').value = emp.id;
-        document.getElementById('emp-documento').value = emp.documento || '';
+        document.getElementById('emp-documento').value = emp.documento_identidad || '';
         document.getElementById('emp-nombre').value = emp.nombre_completo || '';
         document.getElementById('emp-cargo').value = emp.cargo || '';
         document.getElementById('emp-salario').value = emp.salario_base || 0;
@@ -3072,7 +3077,7 @@
                     try {
                         var url = API_BASE_URL + '/api/empleados';
                         var method = 'POST';
-                        var body = { documento: doc, nombre_completo: nombre, cargo: cargo, salario_base: salario };
+                        var body = { documento_identidad: doc, nombre_completo: nombre, cargo: cargo, salario_base: salario };
                         if (isEdit) {
                             url = API_BASE_URL + '/api/empleados/' + empleadoEditandoId;
                             method = 'PUT';
