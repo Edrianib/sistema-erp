@@ -2491,6 +2491,83 @@
                 }
             }
 
+            var provRankRes = await supabase.from('compras_proveedores')
+                .select('proveedor_id, total_compra, proveedores!inner(nombre_empresa)');
+            if (!provRankRes.error) {
+                var comprasProv = provRankRes.data || [];
+                var proveedorTotales = {};
+                for (var cp2 = 0; cp2 < comprasProv.length; cp2++) {
+                    var cpItem = comprasProv[cp2];
+                    var nombreProv = (cpItem.proveedores && cpItem.proveedores.nombre_empresa)
+                        ? cpItem.proveedores.nombre_empresa
+                        : 'Proveedor #' + cpItem.proveedor_id;
+                    if (!proveedorTotales[nombreProv]) proveedorTotales[nombreProv] = 0;
+                    proveedorTotales[nombreProv] += Number(cpItem.total_compra || 0);
+                }
+                var rankingProv = [];
+                var nombresProv = Object.keys(proveedorTotales);
+                for (var np = 0; np < nombresProv.length; np++) {
+                    rankingProv.push({ nombre: nombresProv[np], total: proveedorTotales[nombresProv[np]] });
+                }
+                rankingProv.sort(function(a, b) { return b.total - a.total; });
+                contexto += '\n--- RANKING DE PROVEEDORES (Total Comprado) ---\n';
+                if (rankingProv.length > 0) {
+                    for (var rp = 0; rp < rankingProv.length; rp++) {
+                        contexto += (rp + 1) + '. ' + rankingProv[rp].nombre + ': $' + rankingProv[rp].total.toLocaleString('es-MX', { minimumFractionDigits: 2 }) + '\n';
+                    }
+                } else {
+                    contexto += 'No hay compras registradas a proveedores.\n';
+                }
+            }
+
+            contexto += '\n--- TOP 5 PRODUCTOS MAS VENDIDOS ---\n';
+            var top5Vendidos = ranking.slice(0, 5);
+            for (var tv = 0; tv < top5Vendidos.length; tv++) {
+                var itemV = top5Vendidos[tv];
+                var infoV = mapaProd[itemV.sku] || null;
+                var nombreV = infoV ? (infoV.marca + ' ' + infoV.modelo) : itemV.sku;
+                contexto += (tv + 1) + '. ' + nombreV + ' (SKU: ' + itemV.sku + ') - ' + itemV.cantidad + ' vendidos\n';
+            }
+            if (top5Vendidos.length === 0) {
+                contexto += 'No hay ventas registradas.\n';
+            }
+
+            contexto += '\n--- TOP 5 PRODUCTOS CON MENOS STOCK ---\n';
+            var inventarioOrdenado = inventario.slice().sort(function(a, b) { return (a.stock_actual || 0) - (b.stock_actual || 0); });
+            var top5BajoStock = inventarioOrdenado.slice(0, 5);
+            for (var ts = 0; ts < top5BajoStock.length; ts++) {
+                var itemS = top5BajoStock[ts];
+                var infoS = mapaProd[itemS.producto_sku] || null;
+                var nombreS = infoS ? (infoS.marca + ' ' + infoS.modelo) : itemS.producto_sku;
+                contexto += (ts + 1) + '. ' + nombreS + ' (SKU: ' + itemS.producto_sku + '): Stock=' + itemS.stock_actual + ', Minimo=' + itemS.stock_minimo + '\n';
+            }
+            if (top5BajoStock.length === 0) {
+                contexto += 'No hay inventario registrado.\n';
+            }
+
+            try {
+                var clientesRes = await supabase.from('clientes').select('*');
+                if (!clientesRes.error) {
+                    var clientes = clientesRes.data || [];
+                    contexto += '\n--- CLIENTES MAS ACTIVOS ---\n';
+                    if (clientes.length > 0) {
+                        for (var cl = 0; cl < Math.min(clientes.length, 10); cl++) {
+                            var c = clientes[cl];
+                            var nombreCli = c.nombre || c.razon_social || c.nombre_empresa || ('Cliente #' + (c.id || cl));
+                            contexto += (cl + 1) + '. ' + nombreCli + '\n';
+                        }
+                    } else {
+                        contexto += 'No hay clientes registrados.\n';
+                    }
+                } else {
+                    contexto += '\n--- CLIENTES MAS ACTIVOS ---\n';
+                    contexto += 'No existe una tabla de clientes en el sistema. No hay datos de clientes disponibles.\n';
+                }
+            } catch (e) {
+                contexto += '\n--- CLIENTES MAS ACTIVOS ---\n';
+                contexto += 'No existe una tabla de clientes en el sistema. No hay datos de clientes disponibles.\n';
+            }
+
             return contexto;
         } catch (e) {
             console.error('Error al obtener historial completo:', e);
