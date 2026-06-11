@@ -491,6 +491,17 @@ class UsuarioUpdateRequest(BaseModel):
     nombre: Optional[str] = None
     rol: Optional[str] = None
 
+class EmpleadoCreateRequest(BaseModel):
+    documento: str
+    nombre_completo: str
+    cargo: str
+    salario_base: float
+
+class EmpleadoUpdateRequest(BaseModel):
+    documento: Optional[str] = None
+    nombre_completo: Optional[str] = None
+    cargo: Optional[str] = None
+    salario_base: Optional[float] = None
 
 # ---------- Helper: Cliente Admin de Supabase (via REST API) ----------
 async def _supabase_admin_request(method: str, path: str, json_body: dict = None) -> httpx.Response:
@@ -505,6 +516,8 @@ async def _supabase_admin_request(method: str, path: str, json_body: dict = None
     async with httpx.AsyncClient(timeout=15.0) as client:
         if method == "GET":
             return await client.get(url, headers=headers)
+        elif method == "POST":
+            return await client.post(url, headers=headers, json=json_body)
         elif method == "PATCH":
             return await client.patch(url, headers=headers, json=json_body)
         elif method == "DELETE":
@@ -623,4 +636,131 @@ async def eliminar_usuario(user_id: int, request: Request):
         return JSONResponse(content={"mensaje": f"Usuario {user_id} eliminado correctamente."})
     except Exception as e:
         logger.error("Error en DELETE /api/usuarios/%d: %s", user_id, str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+# ---------- Endpoints de Talento Humano (Empleados) ----------
+@app.get("/api/empleados")
+async def listar_empleados(request: Request, activos: bool = Query(default=True, description="Solo empleados activos")):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    try:
+        if activos:
+            path = "/rest/v1/empleados?select=*&activo=is.true&order=id"
+        else:
+            path = "/rest/v1/empleados?select=*&order=id"
+        resp = await _supabase_admin_request("GET", path)
+        if resp.status_code != 200:
+            return JSONResponse(status_code=502, content={"error": "Error al consultar empleados en Supabase."})
+        empleados = resp.json()
+        return JSONResponse(content={"empleados": empleados, "total": len(empleados)})
+    except Exception as e:
+        logger.error("Error en GET /api/empleados: %s", str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+@app.post("/api/empleados")
+async def crear_empleado(payload: EmpleadoCreateRequest, request: Request):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    doc = payload.documento.strip()
+    nombre = payload.nombre_completo.strip()
+    cargo = payload.cargo.strip()
+
+    if len(doc) < 3 or len(doc) > 30:
+        return JSONResponse(status_code=400, content={"error": "El documento debe tener entre 3 y 30 caracteres."})
+    if len(nombre) < 3 or len(nombre) > 100:
+        return JSONResponse(status_code=400, content={"error": "El nombre debe tener entre 3 y 100 caracteres."})
+    if len(cargo) < 2 or len(cargo) > 50:
+        return JSONResponse(status_code=400, content={"error": "El cargo debe tener entre 2 y 50 caracteres."})
+    if payload.salario_base < 0:
+        return JSONResponse(status_code=400, content={"error": "El salario base no puede ser negativo."})
+
+    try:
+        resp = await _supabase_admin_request("POST", "/rest/v1/empleados", json_body={
+            "documento": doc,
+            "nombre_completo": nombre,
+            "cargo": cargo,
+            "salario_base": payload.salario_base,
+            "activo": True,
+        })
+        if resp.status_code not in (200, 201, 204):
+            logger.error("Error al crear empleado: %s", resp.text)
+            return JSONResponse(status_code=502, content={"error": "Error al crear empleado en Supabase."})
+        logger.info("Empleado creado: %s (%s)", nombre, doc)
+        return JSONResponse(status_code=201, content={"mensaje": "Empleado creado correctamente.", "data": resp.json() if resp.text else {}})
+    except Exception as e:
+        logger.error("Error en POST /api/empleados: %s", str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+@app.put("/api/empleados/{empleado_id}")
+async def actualizar_empleado(empleado_id: int, payload: EmpleadoUpdateRequest, request: Request):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    update_data = {}
+    if payload.documento is not None:
+        doc = payload.documento.strip()
+        if len(doc) < 3 or len(doc) > 30:
+            return JSONResponse(status_code=400, content={"error": "El documento debe tener entre 3 y 30 caracteres."})
+        update_data["documento"] = doc
+    if payload.nombre_completo is not None:
+        nombre = payload.nombre_completo.strip()
+        if len(nombre) < 3 or len(nombre) > 100:
+            return JSONResponse(status_code=400, content={"error": "El nombre debe tener entre 3 y 100 caracteres."})
+        update_data["nombre_completo"] = nombre
+    if payload.cargo is not None:
+        cargo = payload.cargo.strip()
+        if len(cargo) < 2 or len(cargo) > 50:
+            return JSONResponse(status_code=400, content={"error": "El cargo debe tener entre 2 y 50 caracteres."})
+        update_data["cargo"] = cargo
+    if payload.salario_base is not None:
+        if payload.salario_base < 0:
+            return JSONResponse(status_code=400, content={"error": "El salario base no puede ser negativo."})
+        update_data["salario_base"] = payload.salario_base
+
+    if not update_data:
+        return JSONResponse(status_code=400, content={"error": "Debe proporcionar al menos un campo para actualizar."})
+
+    try:
+        resp = await _supabase_admin_request(
+            "PATCH",
+            f"/rest/v1/empleados?id=eq.{empleado_id}",
+            json_body=update_data
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Error al actualizar empleado %d: %s", empleado_id, resp.text)
+            return JSONResponse(status_code=502, content={"error": "Error al actualizar empleado en Supabase."})
+        logger.info("Empleado %d actualizado: %s", empleado_id, update_data)
+        return JSONResponse(content={"mensaje": "Empleado actualizado correctamente.", "actualizado": update_data})
+    except Exception as e:
+        logger.error("Error en PUT /api/empleados/%d: %s", empleado_id, str(e))
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})
+
+
+@app.delete("/api/empleados/{empleado_id}")
+async def eliminar_empleado(empleado_id: int, request: Request):
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Cabecera X-User-Id requerida."})
+
+    try:
+        resp = await _supabase_admin_request(
+            "PATCH",
+            f"/rest/v1/empleados?id=eq.{empleado_id}",
+            json_body={"activo": False}
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Error al desactivar empleado %d: %s", empleado_id, resp.text)
+            return JSONResponse(status_code=502, content={"error": "Error al desactivar empleado en Supabase."})
+        logger.info("Empleado %d desactivado (soft delete)", empleado_id)
+        return JSONResponse(content={"mensaje": f"Empleado {empleado_id} desactivado correctamente (borrado logico)."})
+    except Exception as e:
+        logger.error("Error en DELETE /api/empleados/%d: %s", empleado_id, str(e))
         return JSONResponse(status_code=500, content={"error": "Error interno del servidor."})

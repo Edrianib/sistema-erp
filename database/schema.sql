@@ -80,6 +80,17 @@ CREATE TABLE compras_proveedores (
     usuario_id      BIGINT      NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT
 );
 
+-- 9. Tabla de empleados (Talento Humano)
+CREATE TABLE empleados (
+    id              BIGSERIAL   PRIMARY KEY,
+    documento       TEXT        NOT NULL UNIQUE,
+    nombre_completo TEXT        NOT NULL,
+    cargo           TEXT        NOT NULL,
+    salario_base    NUMERIC(10,2) NOT NULL CHECK (salario_base >= 0),
+    activo          BOOLEAN     NOT NULL DEFAULT true,
+    fecha_creacion  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ============================================================
 -- Índices para búsquedas frecuentes
 -- ============================================================
@@ -93,3 +104,5 @@ CREATE INDEX idx_auditoria_fecha       ON auditoria(fecha DESC);
 CREATE INDEX idx_auditoria_modulo      ON auditoria(modulo);
 CREATE INDEX idx_compras_fecha         ON compras_proveedores(fecha_compra);
 CREATE INDEX idx_compras_proveedor     ON compras_proveedores(proveedor_id);
+CREATE INDEX idx_empleados_activo      ON empleados(activo);
+CREATE INDEX idx_empleados_documento   ON empleados(documento);

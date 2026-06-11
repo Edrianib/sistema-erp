@@ -111,6 +111,7 @@
         var navDashboard = document.querySelector('.nav-item[data-section="dashboard"]');
         var navCompras   = document.querySelector('.nav-item[data-section="compras"]');
         var navGestionUsuarios = document.querySelector('.nav-item-admin-only');
+        var navRRHH = document.querySelector('.nav-item-rrhh-only');
         if (usuarioActivo.rol === 'Vendedor') {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navCompras) navCompras.style.display = 'none';
@@ -120,6 +121,9 @@
         }
         if (navGestionUsuarios) {
             navGestionUsuarios.style.display = usuarioActivo.rol === 'Admin' ? '' : 'none';
+        }
+        if (navRRHH) {
+            navRRHH.style.display = (usuarioActivo.rol === 'Admin' || usuarioActivo.rol === 'Gerente') ? '' : 'none';
         }
     }
 
@@ -2583,6 +2587,165 @@
     }
 
     /* =================================================================
+       MÓDULO DE TALENTO HUMANO — EMPLEADOS (BACKEND REST API)
+    ================================================================= */
+    var empleadosCache = [];
+    var empleadoEditandoId = null;
+
+    function renderTalentoHumano() {
+        return '' +
+        '<div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">' +
+            '<h2>Modulo de Talento Humano</h2>' +
+            '<button id="btnNuevoEmpleado" class="btn-outline" style="font-size:12px;padding:8px 16px;">+ Nuevo Empleado</button>' +
+        '</div>' +
+        '<div class="content-panel full-width">' +
+            '<div class="panel-title"><i data-lucide="contact" class="panel-icon"></i> Listado de Empleados Activos</div>' +
+            '<div class="table-scroll">' +
+            '<table class="table-mini" id="tablaEmpleados">' +
+                '<thead><tr><th>ID</th><th>Documento</th><th>Nombre Completo</th><th>Cargo</th><th>Salario Base</th><th>Acciones</th></tr></thead>' +
+                '<tbody id="empleadosTbody"><tr><td colspan="6" style="text-align:center;color:var(--subtle);">Cargando...</td></tr></tbody>' +
+            '</table>' +
+            '</div>' +
+        '</div>';
+    }
+
+    async function cargarEmpleados() {
+        var tbody = document.getElementById('empleadosTbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        try {
+            var resp = await fetch(API_BASE_URL + '/api/empleados', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                }
+            });
+            if (!resp.ok) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error al cargar empleados.</td></tr>';
+                empleadosCache = [];
+                return;
+            }
+            var data = await resp.json();
+            empleadosCache = data.empleados || [];
+            if (empleadosCache.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--subtle);">No hay empleados registrados.</td></tr>';
+                return;
+            }
+            var h = '';
+            for (var i = 0; i < empleadosCache.length; i++) {
+                var emp = empleadosCache[i];
+                var salarioFormateado = '$' + Number(emp.salario_base).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+                h += '<tr>' +
+                    '<td class="cell-id">EMP-' + emp.id + '</td>' +
+                    '<td>' + sanitizar(emp.documento) + '</td>' +
+                    '<td>' + sanitizar(emp.nombre_completo) + '</td>' +
+                    '<td>' + sanitizar(emp.cargo) + '</td>' +
+                    '<td>' + salarioFormateado + '</td>' +
+                    '<td>' +
+                        '<button class="btn-outline btn-edit-emp" data-id="' + emp.id + '" style="font-size:11px;padding:4px 10px;margin-right:4px;">' +
+                            '<i data-lucide="pencil" style="width:13px;height:13px;"></i>' +
+                        '</button>' +
+                        '<button class="btn-eliminar btn-del-emp" data-id="' + emp.id + '" data-nombre="' + sanitizarAttr(emp.nombre_completo) + '" style="font-size:11px;padding:4px 10px;">' +
+                            '<i data-lucide="trash-2" style="width:13px;height:13px;"></i>' +
+                        '</button>' +
+                    '</td>' +
+                    '</tr>';
+            }
+            tbody.innerHTML = h;
+            lucide.createIcons();
+            bindEmpleadoActions();
+        } catch (err) {
+            console.error('Error al cargar empleados:', err);
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Error de conexion.</td></tr>';
+            empleadosCache = [];
+        }
+    }
+
+    function sanitizarAttr(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function bindEmpleadoActions() {
+        var editBtns = document.querySelectorAll('.btn-edit-emp');
+        for (var i = 0; i < editBtns.length; i++) {
+            editBtns[i].addEventListener('click', function () {
+                var empId = parseInt(this.getAttribute('data-id'));
+                abrirModalEditarEmpleado(empId);
+            });
+        }
+        var delBtns = document.querySelectorAll('.btn-del-emp');
+        for (var j = 0; j < delBtns.length; j++) {
+            delBtns[j].addEventListener('click', function () {
+                var empId = parseInt(this.getAttribute('data-id'));
+                var empNombre = this.getAttribute('data-nombre') || 'este empleado';
+                abrirModalEliminarEmpleado(empId, empNombre);
+            });
+        }
+    }
+
+    function abrirModalNuevoEmpleado() {
+        empleadoEditandoId = null;
+        var modal = document.getElementById('modalEmpleado');
+        if (!modal) return;
+        document.getElementById('modalEmpleadoTitle').textContent = 'Nuevo Empleado';
+        document.getElementById('btnGuardarEmp').textContent = 'Guardar Empleado';
+        document.getElementById('emp-id').value = '';
+        var form = document.getElementById('formEmpleadoNative');
+        if (form) form.reset();
+        modal.classList.remove('hidden');
+        setTimeout(function () {
+            var el = document.getElementById('emp-documento');
+            if (el) el.focus();
+        }, 200);
+    }
+
+    function abrirModalEditarEmpleado(empId) {
+        var emp = null;
+        for (var i = 0; i < empleadosCache.length; i++) {
+            if (empleadosCache[i].id === empId) { emp = empleadosCache[i]; break; }
+        }
+        if (!emp) return;
+        empleadoEditandoId = empId;
+        var modal = document.getElementById('modalEmpleado');
+        if (!modal) return;
+        document.getElementById('modalEmpleadoTitle').textContent = 'Editar Empleado';
+        document.getElementById('btnGuardarEmp').textContent = 'Actualizar Empleado';
+        document.getElementById('emp-id').value = emp.id;
+        document.getElementById('emp-documento').value = emp.documento || '';
+        document.getElementById('emp-nombre').value = emp.nombre_completo || '';
+        document.getElementById('emp-cargo').value = emp.cargo || '';
+        document.getElementById('emp-salario').value = emp.salario_base || 0;
+        modal.classList.remove('hidden');
+        setTimeout(function () {
+            var el = document.getElementById('emp-documento');
+            if (el) el.focus();
+        }, 200);
+    }
+
+    function cerrarModalEmpleado() {
+        var modal = document.getElementById('modalEmpleado');
+        if (modal) modal.classList.add('hidden');
+        var form = document.getElementById('formEmpleadoNative');
+        if (form) form.reset();
+        empleadoEditandoId = null;
+    }
+
+    function abrirModalEliminarEmpleado(empId, empNombre) {
+        var modal = document.getElementById('modalEliminarEmpleado');
+        if (!modal) return;
+        document.getElementById('delEmpMensaje').textContent = 'Desactivar a ' + empNombre + '?';
+        document.getElementById('btnConfirmarModalDelEmp').setAttribute('data-id', empId);
+        modal.classList.remove('hidden');
+    }
+
+    function cerrarModalEliminarEmpleado() {
+        var modal = document.getElementById('modalEliminarEmpleado');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    /* =================================================================
        NAVEGACIÓN
     ================================================================= */
     var renderers = {
@@ -2591,7 +2754,8 @@
         inventario: renderInventario,
         seguridad:  renderSeguridad,
         'gestion-usuarios': renderGestionUsuarios,
-        compras:    renderCompras
+        compras:    renderCompras,
+        'talento-humano': renderTalentoHumano
     };
 
     var titulos = {
@@ -2600,7 +2764,8 @@
         inventario: 'Inventario',
         seguridad:  'Seguridad',
         'gestion-usuarios': 'Gestión de Usuarios',
-        compras:    'Compras / Proveedores'
+        compras:    'Compras / Proveedores',
+        'talento-humano': 'Talento Humano'
     };
 
     function navigateTo(sectionKey) {
@@ -2610,6 +2775,11 @@
 
         if (sectionKey === 'gestion-usuarios' && usuarioActivo && usuarioActivo.rol !== 'Admin') {
             SwalDark.fire({ icon: 'warning', title: 'Acceso denegado', text: 'Solo los administradores pueden gestionar usuarios.', timer: 2500, showConfirmButton: false });
+            return;
+        }
+
+        if (sectionKey === 'talento-humano' && usuarioActivo && usuarioActivo.rol === 'Vendedor') {
+            SwalDark.fire({ icon: 'warning', title: 'Acceso denegado', text: 'El modulo de Talento Humano no esta disponible para vendedores.', timer: 2500, showConfirmButton: false });
             return;
         }
 
@@ -2858,6 +3028,119 @@
                         });
                     } catch (err) {
                         SwalDark.fire({ icon: 'error', title: 'Error al registrar', text: err.message || err });
+                    }
+                });
+            }
+        }
+
+        if (sectionKey === 'talento-humano') {
+            cargarEmpleados().catch(function (err) {
+                console.error('Error al inicializar empleados:', err);
+            });
+
+            var btnNuevoEmp = document.getElementById('btnNuevoEmpleado');
+            if (btnNuevoEmp) {
+                btnNuevoEmp.addEventListener('click', abrirModalNuevoEmpleado);
+            }
+
+            var cerrarModalEmp = document.getElementById('btnCerrarModalEmp');
+            var cancelarModalEmp = document.getElementById('btnCancelarModalEmp');
+            if (cerrarModalEmp) cerrarModalEmp.addEventListener('click', cerrarModalEmpleado);
+            if (cancelarModalEmp) cancelarModalEmp.addEventListener('click', cerrarModalEmpleado);
+
+            var formEmpNative = document.getElementById('formEmpleadoNative');
+            if (formEmpNative) {
+                formEmpNative.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    var doc = document.getElementById('emp-documento').value.trim();
+                    var nombre = document.getElementById('emp-nombre').value.trim();
+                    var cargo = document.getElementById('emp-cargo').value.trim();
+                    var salario = parseFloat(document.getElementById('emp-salario').value);
+
+                    var errs = [];
+                    var eDoc = validarTexto(doc, 'Documento', 3, 30);
+                    if (eDoc) errs.push(eDoc);
+                    var eNom = validarTexto(nombre, 'Nombre Completo', 3, 100);
+                    if (eNom) errs.push(eNom);
+                    var eCar = validarTexto(cargo, 'Cargo', 2, 50);
+                    if (eCar) errs.push(eCar);
+                    var eSal = validarNumero(salario, 'Salario Base', 0, 99999999);
+                    if (eSal) errs.push(eSal);
+                    if (mostrarErrores(errs)) return;
+
+                    var isEdit = empleadoEditandoId !== null;
+                    try {
+                        var url = API_BASE_URL + '/api/empleados';
+                        var method = 'POST';
+                        var body = { documento: doc, nombre_completo: nombre, cargo: cargo, salario_base: salario };
+                        if (isEdit) {
+                            url = API_BASE_URL + '/api/empleados/' + empleadoEditandoId;
+                            method = 'PUT';
+                        }
+                        var resp = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                            },
+                            body: JSON.stringify(body)
+                        });
+                        if (!resp.ok) {
+                            var errData = await resp.json().catch(function () { return { error: 'Error desconocido' }; });
+                            SwalDark.fire({ icon: 'error', title: 'Error', text: errData.error || 'No se pudo guardar el empleado.' });
+                            return;
+                        }
+                        cerrarModalEmpleado();
+                        await cargarEmpleados();
+                        registrarAuditoria(isEdit ? 'Edito empleado: ' + nombre : 'Creo empleado: ' + nombre, 'Talento Humano');
+                        SwalDark.fire({
+                            icon: 'success',
+                            title: isEdit ? 'Empleado actualizado' : 'Empleado creado',
+                            text: nombre + ' guardado correctamente.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } catch (err) {
+                        SwalDark.fire({ icon: 'error', title: 'Error de conexion', text: err.message || err });
+                    }
+                });
+            }
+
+            var cerrarModalDelEmp = document.getElementById('btnCerrarModalDelEmp');
+            var cancelarModalDelEmp = document.getElementById('btnCancelarModalDelEmp');
+            if (cerrarModalDelEmp) cerrarModalDelEmp.addEventListener('click', cerrarModalEliminarEmpleado);
+            if (cancelarModalDelEmp) cancelarModalDelEmp.addEventListener('click', cerrarModalEliminarEmpleado);
+
+            var btnConfirmarDelEmp = document.getElementById('btnConfirmarModalDelEmp');
+            if (btnConfirmarDelEmp) {
+                btnConfirmarDelEmp.addEventListener('click', async function () {
+                    var empId = parseInt(this.getAttribute('data-id'));
+                    if (!empId) return;
+                    try {
+                        var resp = await fetch(API_BASE_URL + '/api/empleados/' + empId, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-User-Id': usuarioActivo ? String(usuarioActivo.id) : ''
+                            }
+                        });
+                        if (!resp.ok) {
+                            var errData = await resp.json().catch(function () { return { error: 'Error desconocido' }; });
+                            SwalDark.fire({ icon: 'error', title: 'Error', text: errData.error || 'No se pudo desactivar el empleado.' });
+                            return;
+                        }
+                        cerrarModalEliminarEmpleado();
+                        await cargarEmpleados();
+                        registrarAuditoria('Desactivo empleado ID ' + empId, 'Talento Humano');
+                        SwalDark.fire({
+                            icon: 'success',
+                            title: 'Empleado desactivado',
+                            text: 'El empleado fue removido de la lista activa.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } catch (err) {
+                        SwalDark.fire({ icon: 'error', title: 'Error de conexion', text: err.message || err });
                     }
                 });
             }
